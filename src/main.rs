@@ -1,8 +1,14 @@
-use rust_shorten_url::configuration;
-use secrecy::ExposeSecret;
+use rust_shorten_url::{configuration, startup::Application};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let configuration = configuration::get_configuration().expect("Failed to read configuration");
-    println!("{:?}", configuration.application);
-    println!("{:?}", configuration.redis_uri.expose_secret());
+    let application = Application::build(configuration.clone())
+        .await
+        .expect("Failed to build application");
+
+    application
+        .run_until_stopped()
+        .await
+        .expect("Failed to run application");
 }
