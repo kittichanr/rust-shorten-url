@@ -1,8 +1,8 @@
 use std::net::TcpListener;
 
-use actix_session::storage::RedisSessionStore;
-use actix_web::{App, HttpResponse, HttpServer, Responder, cookie::Key, dev::Server, web};
-use secrecy::{ExposeSecret, SecretString};
+use actix_web::{App, HttpResponse, HttpServer, Responder, dev::Server, web};
+use redis::{Client, Commands};
+use secrecy::ExposeSecret;
 
 use crate::configuration::Settings;
 
@@ -19,7 +19,11 @@ impl Application {
         );
         let listener = TcpListener::bind(&address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, configuration.redis_uri).await?;
+
+        let client = redis::Client::open(configuration.redis_uri.expose_secret()).unwrap();
+        let pool = r2d2::Pool::new(client).unwrap();
+
+        let server = run(listener, pool).await?;
         Ok(Self { port, server })
     }
 
@@ -32,17 +36,35 @@ impl Application {
     }
 }
 
-pub async fn run(listener: TcpListener, redis_uri: SecretString) -> Result<Server, std::io::Error> {
-    let redis_store = RedisSessionStore::new(redis_uri.expose_secret())
-        .await
-        .expect("Failed to create Redis session store");
-    let server = HttpServer::new(move || App::new().route("/hello", web::get().to(manual_hello)))
-        .listen(listener)?
-        .run();
+pub async fn run(
+    listener: TcpListener,
+    redis_pool: r2d2::Pool<Client>,
+) -> Result<Server, std::io::Error> {
+    let redis_pool = web::Data::new(redis_pool);
+    let server = HttpServer::new(move || {
+        App::new()
+            .route("/hello", web::get().to(manual_hello))
+            .app_data(redis_pool.clone())
+    })
+    .listen(listener)?
+    .run();
 
     Ok(server)
 }
 
-async fn manual_hello() -> impl Responder {
+async fn manual_hello(redis_pool: web::Data<r2d2::Pool<Client>>) -> impl Responder {
+    let mut redis_conn = redis_pool
+        .get()
+        .expect("Failed to get Redis connection from pool");
+
+    let _: () = redis_conn
+        .set("my_key", 42)
+        .expect("failed to execute SET for 'my_key'");
+
+    let val: i32 = redis_conn
+        .get("my_key")
+        .expect("failed to execute GET for 'my_key'");
+
+    println!("counter = {}", val);
     HttpResponse::Ok().body("Hey there!")
 }

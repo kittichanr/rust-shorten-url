@@ -7,6 +7,8 @@ edition = "2024"
 actix-session = { version = "0.11.0", features = ["redis-session-rustls"] }
 actix-web = "4.11.0"
 config = "0.15.16"
+r2d2 = "0.8.10"
+redis = { version = "0.32.5", features = ["r2d2"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.225", features = ["derive"] }
 serde-aux = "4.7.0"
