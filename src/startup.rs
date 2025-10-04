@@ -4,7 +4,7 @@ use actix_web::{App, HttpResponse, HttpServer, Responder, dev::Server, web};
 use redis::{Client, Commands};
 use secrecy::ExposeSecret;
 
-use crate::configuration::Settings;
+use crate::{configuration::Settings, routes::shorten::post::post_shorten};
 
 pub struct Application {
     port: u16,
@@ -23,7 +23,7 @@ impl Application {
         let client = redis::Client::open(configuration.redis_uri.expose_secret()).unwrap();
         let pool = r2d2::Pool::new(client).unwrap();
 
-        let server = run(listener, pool).await?;
+        let server = run(listener, pool, configuration).await?;
         Ok(Self { port, server })
     }
 
@@ -39,12 +39,16 @@ impl Application {
 pub async fn run(
     listener: TcpListener,
     redis_pool: r2d2::Pool<Client>,
+    configuration: Settings,
 ) -> Result<Server, std::io::Error> {
     let redis_pool = web::Data::new(redis_pool);
+    let configuration = web::Data::new(configuration);
     let server = HttpServer::new(move || {
         App::new()
             .route("/hello", web::get().to(manual_hello))
+            .route("/shorten", web::post().to(post_shorten))
             .app_data(redis_pool.clone())
+            .app_data(configuration.clone())
     })
     .listen(listener)?
     .run();
