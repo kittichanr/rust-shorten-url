@@ -4,7 +4,10 @@ use actix_web::{App, HttpResponse, HttpServer, Responder, dev::Server, web};
 use redis::{Client, Commands};
 use secrecy::ExposeSecret;
 
-use crate::{configuration::Settings, routes::shorten::post::post_shorten};
+use crate::{
+    configuration::Settings,
+    routes::{resolve::get::get_resolve, shorten::post::post_shorten},
+};
 
 pub struct Application {
     port: u16,
@@ -47,6 +50,7 @@ pub async fn run(
         App::new()
             .route("/hello", web::get().to(manual_hello))
             .route("/shorten", web::post().to(post_shorten))
+            .route("/resolve/{url}", web::get().to(get_resolve))
             .app_data(redis_pool.clone())
             .app_data(configuration.clone())
     })
